@@ -10,6 +10,12 @@
 Tài liệu này hướng dẫn nhóm xây dựng dự án từ đầu đến khi nộp bài: thiết kế dữ liệu, chia module,
 cách cài đặt từng chức năng, cách đáp ứng **từng yêu cầu bắt buộc** trong đề và cách kiểm thử.
 
+**Trạng thái TV3:** Đã có module `file_io`, dữ liệu mẫu và kiểm thử tự động.
+Xem [hướng dẫn module TV3](docs/file_io.md) để build, kiểm thử và bàn giao giao diện.
+Menu trong `src/main.c` đã nối đọc khi khởi động, tự lưu sau mỗi lần thêm/sửa/xóa
+thành công, lưu khi thoát, import file mẫu riêng (8),
+xuất CSV (9), xem bản ghi trong file (10) và tham số `-f <file>`.
+
 ---
 
 ## Mục lục

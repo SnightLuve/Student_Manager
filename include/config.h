@@ -15,6 +15,10 @@
 #define MAX_SCORE     10.0f
 
 #define DEFAULT_DATA_FILE "data/students.dat"
+/* CMake truyen duong dan file mau trong source. */
+#ifndef DEFAULT_SAMPLE_FILE
+#define DEFAULT_SAMPLE_FILE "data/sample_students.dat"
+#endif
 #define FILE_MAGIC        0x53544D47u  /* "STMG" — nhận dạng file   */
 #define FILE_VERSION      1
 

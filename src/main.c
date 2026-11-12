@@ -1,5 +1,5 @@
 /*
- * main.c — Menu điều khiển các chức năng của module TV1 (student + list)
+ * main.c — Menu điều khiển module TV1 (student + list) và TV3 (file_io).
  * bằng vòng lặp do-while và switch-case.
  * TV4 có thể tách phần nhập liệu sang input.c và phần menu sang menu.c sau.
  */
@@ -7,10 +7,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 
-#include "list.h"
+#include "file_io.h"
 
 /* ===================== Nhập liệu an toàn (fgets) ===================== */
+
+static int inputEnded = 0;
 
 /* Xóa khoảng trắng đầu/cuối chuỗi. */
 static void trim(char *s) {
@@ -24,7 +33,11 @@ static void trim(char *s) {
 /* Đọc một dòng, bỏ '\n'; nếu dòng dài hơn bộ đệm thì xả phần thừa. */
 static void readLine(const char *prompt, char *buf, size_t size) {
     printf("%s", prompt);
-    if (fgets(buf, (int)size, stdin) == NULL) { buf[0] = '\0'; return; }
+    if (fgets(buf, (int)size, stdin) == NULL) {
+        inputEnded = 1;
+        buf[0] = '\0';
+        return;
+    }
     size_t len = strlen(buf);
     if (len > 0 && buf[len - 1] == '\n') {
         buf[len - 1] = '\0';
@@ -39,6 +52,7 @@ static void readLine(const char *prompt, char *buf, size_t size) {
 static void readNonEmpty(const char *prompt, char *buf, size_t size) {
     do {
         readLine(prompt, buf, size);
+        if (inputEnded) return;
         if (buf[0] == '\0') printf("  ! Khong duoc de trong.\n");
     } while (buf[0] == '\0');
 }
@@ -49,8 +63,11 @@ static int readInt(const char *prompt, int min, int max) {
     char *end;
     for (;;) {
         readLine(prompt, line, sizeof line);
+        if (inputEnded) return min;
+        errno = 0;
         long v = strtol(line, &end, 10);
-        if (end != line && *end == '\0' && v >= min && v <= max) return (int)v;
+        if (errno != ERANGE && end != line && *end == '\0' && v >= min && v <= max)
+            return (int)v;
         printf("  ! Vui long nhap so nguyen trong khoang [%d, %d].\n", min, max);
     }
 }
@@ -61,6 +78,7 @@ static float readFloat(const char *prompt, float min, float max) {
     char *end;
     for (;;) {
         readLine(prompt, line, sizeof line);
+        if (inputEnded) return min;
         float v = strtof(line, &end);
         if (end != line && *end == '\0' && v >= min && v <= max) return v;
         printf("  ! Vui long nhap so trong khoang [%.1f, %.1f].\n", min, max);
@@ -72,6 +90,7 @@ static int confirm(const char *prompt) {
     char line[MAX_LINE];
     for (;;) {
         readLine(prompt, line, sizeof line);
+        if (inputEnded) return 0;
         if (line[0] == 'y' || line[0] == 'Y') return 1;
         if (line[0] == 'n' || line[0] == 'N') return 0;
         printf("  ! Nhap y hoac n.\n");
@@ -115,7 +134,16 @@ static void waitEnter(void) {
 
 /* ===================== Xử lý từng mục menu ===================== */
 
-static void handleAdd(Node **head) {
+static int handleSave(const Node *head, const char *dataFile);
+
+/* Ghi ngay sau mỗi thay đổi thành công; lỗi ghi không làm mất dữ liệu trong RAM. */
+static void autoSave(const Node *head, const char *dataFile) {
+    if (!handleSave(head, dataFile))
+        printf("  ! Thay doi moi CHUA DUOC LUU, chi con trong RAM. "
+               "Hay khac phuc loi, chuong trinh se thu luu lai khi thoat.\n");
+}
+
+static void handleAdd(Node **head, const char *dataFile) {
     Student s;
     char id[MAX_ID], name[MAX_NAME], className[MAX_CLASS];
     float scores[MAX_SUBJECTS];
@@ -130,10 +158,13 @@ static void handleAdd(Node **head) {
     readNonEmpty("  Lop          : ", className, sizeof className);
     readScores(scores);
 
+    if (inputEnded) return;                       /* không thêm bản ghi nhập dở */
+
     initStudent(&s, id, name, className, scores);
     switch (addStudent(head, &s)) {
         case 1:  printf("  => Da them. DTB = %.2f, xep loai: %s\n",
-                        s.avg, rankName(classify(s.avg)));   break;
+                        s.avg, rankName(classify(s.avg)));
+                 autoSave(*head, dataFile);                 break;
         case 0:  printf("  ! Trung ma sinh vien.\n");          break;
         default: printf("  ! Loi: het bo nho.\n");             break;
     }
@@ -148,7 +179,7 @@ static void handleFind(Node *head) {
     else           printStudentDetail(&p->data);
 }
 
-static void handleEdit(Node *head) {
+static void handleEdit(Node *head, const char *dataFile) {
     char id[MAX_ID];
     printf("\n--- SUA THONG TIN ---\n");
     readId("  Nhap ma SV can sua: ", id);
@@ -170,15 +201,21 @@ static void handleEdit(Node *head) {
             case 1: {
                 char name[MAX_NAME];
                 readName("  Ho ten moi: ", name);
-                setName(&p->data, name);
-                printf("  => Da sua ho ten.\n");
+                if (inputEnded) return;
+                if (setName(&p->data, name)) {
+                    printf("  => Da sua ho ten.\n");
+                    autoSave(head, dataFile);
+                }
                 break;
             }
             case 2: {
                 char className[MAX_CLASS];
                 readNonEmpty("  Lop moi: ", className, sizeof className);
-                setClassName(&p->data, className);
-                printf("  => Da sua lop.\n");
+                if (inputEnded) return;
+                if (setClassName(&p->data, className)) {
+                    printf("  => Da sua lop.\n");
+                    autoSave(head, dataFile);
+                }
                 break;
             }
             case 3: {
@@ -186,15 +223,21 @@ static void handleEdit(Node *head) {
                     printf("    %d. %s\n", i + 1, SUBJECT_NAMES[i]);
                 int sub = readInt("  Chon mon: ", 1, MAX_SUBJECTS);
                 float score = readFloat("  Diem moi: ", MIN_SCORE, MAX_SCORE);
-                setScore(&p->data, sub - 1, score);       /* tự tính lại ĐTB */
-                printf("  => Da sua diem. DTB moi = %.2f\n", p->data.avg);
+                if (inputEnded) return;
+                if (setScore(&p->data, sub - 1, score)) { /* tự tính lại ĐTB */
+                    printf("  => Da sua diem. DTB moi = %.2f\n", p->data.avg);
+                    autoSave(head, dataFile);
+                }
                 break;
             }
             case 4: {
                 float scores[MAX_SUBJECTS];
                 readScores(scores);
-                setAllScores(&p->data, scores);           /* tự tính lại ĐTB */
-                printf("  => Da sua diem. DTB moi = %.2f\n", p->data.avg);
+                if (inputEnded) return;
+                if (setAllScores(&p->data, scores)) {     /* tự tính lại ĐTB */
+                    printf("  => Da sua diem. DTB moi = %.2f\n", p->data.avg);
+                    autoSave(head, dataFile);
+                }
                 break;
             }
             case 0:
@@ -204,7 +247,7 @@ static void handleEdit(Node *head) {
     } while (choice != 0);
 }
 
-static void handleDelete(Node **head) {
+static void handleDelete(Node **head, const char *dataFile) {
     char id[MAX_ID];
     printf("\n--- XOA SINH VIEN ---\n");
     readId("  Nhap ma SV can xoa: ", id);
@@ -213,17 +256,88 @@ static void handleDelete(Node **head) {
 
     printStudentDetail(&p->data);
     if (confirm("  Ban chac chan muon xoa? (y/n): ")) {
-        deleteStudent(head, id);
-        printf("  => Da xoa sinh vien %s.\n", id);
+        if (deleteStudent(head, id)) {
+            printf("  => Da xoa sinh vien %s.\n", id);
+            autoSave(*head, dataFile);
+        }
     } else {
         printf("  Da huy.\n");
     }
 }
 
-static void printMainMenu(void) {
+/* Lưu toàn bộ DSLK, bao gồm các thay đổi thêm/sửa/xóa từ lần lưu trước. */
+static int handleSave(const Node *head, const char *dataFile) {
+    if (!saveToFile(dataFile, head)) {
+        printf("  ! Khong luu duoc %s. Kiem tra thu muc, quyen ghi va file .tmp.\n",
+               dataFile);
+        return 0;
+    }
+    printf("  => Da luu %d sinh vien vao %s.\n", countNodes(head), dataFile);
+    return 1;
+}
+
+/* Doc file mau rieng, bo qua ma da co, khong ghi de sinh vien dang su dung. */
+static void handleImportSample(Node **head, const char *dataFile) {
+    Node *sample = NULL;
+    printf("\n--- IMPORT DU LIEU MAU ---\n");
+    printf("  File mau: %s\n", DEFAULT_SAMPLE_FILE);
+    int total = loadFromFile(DEFAULT_SAMPLE_FILE, &sample);
+    if (total <= 0) {
+        printf("  ! Khong doc duoc du lieu mau: file thieu, rong hoac khong hop le.\n");
+        freeList(&sample);
+        return;
+    }
+    int skipped = 0;
+    Node **link = &sample;
+    while (*link != NULL) {
+        Node *node = *link;
+        if (findById(*head, node->data.id) != NULL) {
+            *link = node->next;
+            free(node);
+            ++skipped;
+        } else {
+            link = &node->next;
+        }
+    }
+    Node **tail = head;
+    while (*tail != NULL) tail = &(*tail)->next;
+    *tail = sample;
+    printf("  => Da import %d sinh vien mau, bo qua %d ma da ton tai.\n",
+           total - skipped, skipped);
+    if (total > skipped) autoSave(*head, dataFile);
+}
+
+/* CSV dùng dữ liệu hiện tại trong RAM, không cần lưu nhị phân trước. */
+static void handleExportCsv(const Node *head, const char *dataFile) {
+    char path[MAX_LINE];
+    readLine("  File CSV (Enter de dung report.csv): ", path, sizeof path);
+    if (inputEnded) return;
+    if (path[0] == '\0') strcpy(path, "report.csv");
+    if (strcmp(path, dataFile) == 0) {
+        printf("  ! Hay chon file CSV khac file nhi phan dang su dung.\n");
+        return;
+    }
+    if (exportCsv(path, head)) printf("  => Da xuat CSV: %s\n", path);
+    else printf("  ! Khong xuat duoc CSV. Kiem tra duong dan/quyen ghi/file .tmp.\n");
+}
+
+/* STT giao diện bắt đầu từ 1, index của readRecordAt bắt đầu từ 0. */
+static void handleReadRecord(const char *dataFile) {
+    printf("\n--- XEM BAN GHI TRONG FILE DA LUU ---\n");
+    printf("  File: %s (chua bao gom thay doi chua luu).\n", dataFile);
+    int stt = readInt("  Nhap STT sinh vien trong file (tu 1): ", 1, INT_MAX);
+    if (inputEnded) return;
+    Student s;
+    if (readRecordAt(dataFile, stt - 1, &s)) printStudentDetail(&s);
+    else printf("  ! Khong doc duoc: STT ngoai pham vi hoac file khong hop le.\n");
+}
+
+static void printMainMenu(const char *dataFile) {
     printf("\n============================================\n");
     printf("        CHUONG TRINH QUAN LY SINH VIEN\n");
     printf("============================================\n");
+    printf("  File du lieu: %s\n", dataFile);
+    printf("  Tu dong luu sau moi lan them/sua/xoa thanh cong.\n");
     printf("  1. Them sinh vien\n");
     printf("  2. Hien thi danh sach sinh vien\n");
     printf("  3. Tim sinh vien theo ma\n");
@@ -231,33 +345,79 @@ static void printMainMenu(void) {
     printf("  5. Xoa sinh vien\n");
     printf("  6. In danh sach theo thu tu nguoc\n");
     printf("  7. Dem so sinh vien\n");
+    printf("  8. Import du lieu mau\n");
+    printf("  9. Xuat bao cao CSV\n");
+    printf(" 10. Xem ban ghi trong file da luu\n");
     printf("  0. Thoat\n");
     printf("--------------------------------------------\n");
 }
 
 /* ===================== main ===================== */
 
-int main(void) {
+int main(int argc, char **argv) {
+    const char *dataFile = DEFAULT_DATA_FILE;
+    if (argc == 3 && strcmp(argv[1], "-f") == 0 && argv[2][0] != '\0') {
+        dataFile = argv[2];
+    } else if (argc != 1) {
+        fprintf(stderr, "Cach dung: %s [-f <file_du_lieu>]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+    /* Chay tu thu muc build van tao duoc file du lieu mac dinh lan dau. */
+    if (strcmp(dataFile, DEFAULT_DATA_FILE) == 0) {
+#ifdef _WIN32
+        int created = _mkdir("data");
+#else
+        int created = mkdir("data", 0777);
+#endif
+        if (created != 0 && errno != EEXIST) {
+            fprintf(stderr, "Khong tao duoc thu muc data.\n");
+            return EXIT_FAILURE;
+        }
+    }
     Node *head = NULL;
+    int loaded = loadFromFile(dataFile, &head);
+    if (loaded < 0) {
+        fprintf(stderr, "Khong doc duoc %s: file loi/khong hop le hoac thieu bo nho.\n"
+                        "File duoc giu nguyen. Hay kiem tra hoac chon file khac bang -f.\n",
+                dataFile);
+        return EXIT_FAILURE;
+    }
+    printf("Da doc %d sinh vien tu %s.\n", loaded, dataFile);
     int choice;
+    int result = EXIT_SUCCESS;
 
     do {
-        printMainMenu();
-        choice = readInt("Lua chon cua ban: ", 0, 7);
+        printMainMenu(dataFile);
+        choice = readInt("Lua chon cua ban: ", 0, 10);
 
         switch (choice) {
-            case 1: handleAdd(&head);       break;
+            case 1: handleAdd(&head, dataFile); break;
             case 2: printList(head);        break;
             case 3: handleFind(head);       break;
-            case 4: handleEdit(head);       break;
-            case 5: handleDelete(&head);    break;
+            case 4: handleEdit(head, dataFile); break;
+            case 5: handleDelete(&head, dataFile); break;
             case 6: printListReverse(head); break;
             case 7: printf("  So sinh vien: %d\n", countNodes(head)); break;
-            case 0: printf("Tam biet!\n");  break;
+            case 8: handleImportSample(&head, dataFile); break;
+            case 9: handleExportCsv(head, dataFile); break;
+            case 10: handleReadRecord(dataFile); break;
+            case 0:
+                if (handleSave(head, dataFile)) {
+                    printf("Tam biet!\n");
+                } else if (inputEnded) {
+                    result = EXIT_FAILURE;
+                } else if (!confirm("  Thoat ma khong luu cac thay doi? (y/n): ")) {
+                    choice = -1;            /* trở lại menu để thử lưu lại */
+                    if (inputEnded) {
+                        choice = 0;
+                        result = EXIT_FAILURE;
+                    }
+                }
+                break;
         }
         if (choice != 0) waitEnter();
     } while (choice != 0);
 
     freeList(&head);                       /* giải phóng toàn bộ bộ nhớ */
-    return 0;
+    return result;
 }
