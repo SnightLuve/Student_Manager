@@ -1,2 +1,4 @@
 # Thu muc build cuc bo cua CMake/CLion.
 /cmake-build-*/
+# Cau hinh IDE (CLion/JetBrains).
+/.idea/
