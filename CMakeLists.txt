@@ -3,13 +3,14 @@ project(Student_Manager C)
 
 set(CMAKE_C_STANDARD 11)
 
-# Các module khác (search_sort, stats, input, menu) sẽ được thêm
-# vào đây khi TV2–TV4 hoàn thành.
+# Các module input, menu sẽ được thêm vào đây khi TV4 hoàn thành.
 add_executable(Student_Manager
         src/main.c
         src/student.c
         src/list.c
-        src/file_io.c)
+        src/file_io.c
+        src/search_sort.c
+        src/stats.c)
 
 target_include_directories(Student_Manager PRIVATE include)
 target_compile_definitions(Student_Manager PRIVATE
@@ -34,6 +35,15 @@ if (BUILD_TESTING)
     endif ()
     add_test(NAME file_io COMMAND file_io_tests)
     add_test(NAME file_io_sample COMMAND file_io_tests
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/students.dat")
+    add_executable(search_sort_stats_tests
+            tests/test_search_sort_stats.c src/student.c src/list.c src/file_io.c
+            src/search_sort.c src/stats.c)
+    target_include_directories(search_sort_stats_tests PRIVATE include)
+    if (NOT MSVC)
+        target_compile_options(search_sort_stats_tests PRIVATE -Wall -Wextra)
+    endif ()
+    add_test(NAME search_sort_stats COMMAND search_sort_stats_tests
             "${CMAKE_CURRENT_SOURCE_DIR}/data/students.dat")
     add_test(NAME menu_file_io COMMAND "${CMAKE_COMMAND}"
             "-DPROGRAM=$<TARGET_FILE:Student_Manager>"
