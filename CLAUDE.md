@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Student Manager — a C11 console app (university "Kỹ thuật lập trình" group assignment) that manages students (ID, name, class, 5 subject scores) in a singly linked list and persists them to a binary file. `README.md` (Vietnamese) is the full design spec and grading checklist; `docs/file_io.md` documents the file I/O module contract. Code comments and UI strings are Vietnamese, mostly without diacritics in printed output.
 
-Work is split by team member (TV1–TV5, see README §9). Only part of the README's planned layout exists: `search_sort`, `stats`, `input`, `menu` modules are **not implemented yet** — input handling and the menu currently live in `src/main.c`. When adding a module, also add its `.c` to every relevant target in `CMakeLists.txt`.
+Work is split by team member (TV1–TV5, see README §9). Only part of the README's planned layout exists: `search_sort` and `stats` (TV2) are implemented and unit-tested but **not yet wired into the menu**; `input` and `menu` modules are **not implemented yet** — input handling and the menu currently live in `src/main.c`. When adding a module, also add its `.c` to every relevant target in `CMakeLists.txt`.
 
 ## Build & test
 
@@ -38,5 +38,6 @@ cmake --build build --target create_sample_data && build/create_sample_data
 
 - Changing `Student`/`FileHeader` layout changes the on-disk format: bump `FILE_VERSION` and regenerate sample data. The binary format is compiler/platform dependent.
 - `tests/test_menu.cmake` drives the real menu via stdin scripts and asserts on **exact output strings and menu numbering** (e.g. `"Da doc 18 sinh vien"`, `"DTB moi = 8.08"`). Changing menu text/options requires updating this test. It operates on a copy of the sample data, never the shipped files.
-- Sample data invariants relied on by tests: 18 students, 3 classes, 3 students per rank level.
+- Sample data invariants relied on by tests: 18 students, 3 classes, 3 students per rank level. All tests read `data/sample_students.dat`, never `data/students.dat` (the live data file the app autosaves to).
+- Text input goes through `readNonEmpty`, which rejects (never silently truncates) input longer than the field buffer; limits are in bytes, so Vietnamese diacritics count 2–3 each. `readId` must reject the same characters as `validStudent` in `file_io.c` (any `isspace`), or saving fails for the whole list.
 - Naming: functions `camelCase`, types `PascalCase`, constants `UPPER_CASE`; headers use `#ifndef` include guards; `main()` should stay thin.

@@ -30,31 +30,50 @@ static void trim(char *s) {
     while (len > 0 && isspace((unsigned char)s[len - 1])) s[--len] = '\0';
 }
 
-/* Đọc một dòng, bỏ '\n'; nếu dòng dài hơn bộ đệm thì xả phần thừa. */
-static void readLine(const char *prompt, char *buf, size_t size) {
+/* Đọc một dòng, bỏ '\n'. Trả về 1 nếu đọc trọn dòng; 0 nếu dòng dài hơn
+ * bộ đệm (phần thừa đã bị xả, buf chỉ chứa phần đầu → caller phải báo lỗi). */
+static int readLine(const char *prompt, char *buf, size_t size) {
     printf("%s", prompt);
     if (fgets(buf, (int)size, stdin) == NULL) {
         inputEnded = 1;
         buf[0] = '\0';
-        return;
+        return 1;
     }
+    int whole = 1;
     size_t len = strlen(buf);
     if (len > 0 && buf[len - 1] == '\n') {
         buf[len - 1] = '\0';
     } else {
-        int c;
-        while ((c = getchar()) != '\n' && c != EOF) { }
+        /* Không có '\n': hoặc là dòng cuối không xuống dòng (gặp EOF ngay),
+         * hoặc dòng quá dài → xả phần còn lại. */
+        int c = getchar();
+        if (c != '\n' && c != EOF) {
+            whole = 0;
+            while ((c = getchar()) != '\n' && c != EOF) { }
+        }
     }
     trim(buf);
+    return whole;
 }
 
-/* Đọc chuỗi không rỗng. */
+/* Đọc chuỗi không rỗng, dài tối đa size - 1 byte (sau khi bỏ khoảng trắng
+ * đầu/cuối). Quá dài thì báo lỗi và nhập lại, KHÔNG cắt ngầm. */
 static void readNonEmpty(const char *prompt, char *buf, size_t size) {
-    do {
-        readLine(prompt, buf, size);
-        if (inputEnded) return;
-        if (buf[0] == '\0') printf("  ! Khong duoc de trong.\n");
-    } while (buf[0] == '\0');
+    char line[MAX_LINE];
+    for (;;) {
+        int whole = readLine(prompt, line, sizeof line);
+        if (inputEnded) { buf[0] = '\0'; return; }
+        size_t len = strlen(line);
+        if (len == 0) {
+            printf("  ! Khong duoc de trong.\n");
+        } else if (!whole || len >= size) {
+            printf("  ! Qua dai: toi da %d byte (chu co dau chiem 2-3 byte).\n",
+                   (int)size - 1);
+        } else {
+            memcpy(buf, line, len + 1);
+            return;
+        }
+    }
 }
 
 /* Đọc số nguyên trong [min, max]. */
@@ -62,11 +81,12 @@ static int readInt(const char *prompt, int min, int max) {
     char line[MAX_LINE];
     char *end;
     for (;;) {
-        readLine(prompt, line, sizeof line);
+        int whole = readLine(prompt, line, sizeof line);
         if (inputEnded) return min;
         errno = 0;
         long v = strtol(line, &end, 10);
-        if (errno != ERANGE && end != line && *end == '\0' && v >= min && v <= max)
+        if (whole && errno != ERANGE && end != line && *end == '\0'
+            && v >= min && v <= max)
             return (int)v;
         printf("  ! Vui long nhap so nguyen trong khoang [%d, %d].\n", min, max);
     }
@@ -77,10 +97,10 @@ static float readFloat(const char *prompt, float min, float max) {
     char line[MAX_LINE];
     char *end;
     for (;;) {
-        readLine(prompt, line, sizeof line);
+        int whole = readLine(prompt, line, sizeof line);
         if (inputEnded) return min;
         float v = strtof(line, &end);
-        if (end != line && *end == '\0' && v >= min && v <= max) return v;
+        if (whole && end != line && *end == '\0' && v >= min && v <= max) return v;
         printf("  ! Vui long nhap so trong khoang [%.1f, %.1f].\n", min, max);
     }
 }
@@ -97,12 +117,17 @@ static int confirm(const char *prompt) {
     }
 }
 
-/* Đọc mã SV: không rỗng, không chứa dấu cách, chuyển về in hoa. */
+/* Đọc mã SV: không rỗng, không chứa khoảng trắng (cách, tab...), chuyển về in hoa.
+ * Phải khớp quy tắc validStudent trong file_io.c, nếu không SV thêm được vào RAM
+ * nhưng mọi lần lưu file sau đó đều thất bại. */
 static void readId(const char *prompt, char *id) {
     for (;;) {
         readNonEmpty(prompt, id, MAX_ID);
-        if (strchr(id, ' ') == NULL) { normalizeId(id); return; }
-        printf("  ! Ma SV khong duoc chua dau cach.\n");
+        int hasSpace = 0;
+        for (const char *p = id; *p != '\0'; p++)
+            if (isspace((unsigned char)*p)) { hasSpace = 1; break; }
+        if (!hasSpace) { normalizeId(id); return; }
+        printf("  ! Ma SV khong duoc chua khoang trang.\n");
     }
 }
 
@@ -268,8 +293,11 @@ static void handleDelete(Node **head, const char *dataFile) {
 /* Lưu toàn bộ DSLK, bao gồm các thay đổi thêm/sửa/xóa từ lần lưu trước. */
 static int handleSave(const Node *head, const char *dataFile) {
     if (!saveToFile(dataFile, head)) {
-        printf("  ! Khong luu duoc %s. Kiem tra thu muc, quyen ghi va file .tmp.\n",
-               dataFile);
+        /* File tạm được tạo độc quyền (xem docs/file_io.md): nếu lần chạy trước bị
+         * ngắt giữa chừng để lại file .tmp thì phải xóa nó thì mới lưu được. */
+        printf("  ! Khong luu duoc %s. Kiem tra thu muc, quyen ghi; neu con file "
+               "%s.tmp tu lan chay truoc bi ngat, hay kiem tra roi xoa no.\n",
+               dataFile, dataFile);
         return 0;
     }
     printf("  => Da luu %d sinh vien vao %s.\n", countNodes(head), dataFile);
@@ -307,13 +335,28 @@ static void handleImportSample(Node **head, const char *dataFile) {
     if (total > skipped) autoSave(*head, dataFile);
 }
 
+/* Trả về 1 nếu path là file dữ liệu nhị phân của chương trình (đọc magic ở đầu).
+ * Nhận ra cả khi cùng một file được viết khác đi, vd "./data/students.dat". */
+static int isStudentDataFile(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) return 0;
+    unsigned int magic = 0;
+    int match = fread(&magic, sizeof magic, 1, f) == 1 && magic == FILE_MAGIC;
+    fclose(f);
+    return match;
+}
+
 /* CSV dùng dữ liệu hiện tại trong RAM, không cần lưu nhị phân trước. */
 static void handleExportCsv(const Node *head, const char *dataFile) {
     char path[MAX_LINE];
-    readLine("  File CSV (Enter de dung report.csv): ", path, sizeof path);
+    int whole = readLine("  File CSV (Enter de dung report.csv): ", path, sizeof path);
     if (inputEnded) return;
+    if (!whole) {
+        printf("  ! Duong dan qua dai.\n");
+        return;
+    }
     if (path[0] == '\0') strcpy(path, "report.csv");
-    if (strcmp(path, dataFile) == 0) {
+    if (strcmp(path, dataFile) == 0 || isStudentDataFile(path)) {
         printf("  ! Hay chon file CSV khac file nhi phan dang su dung.\n");
         return;
     }

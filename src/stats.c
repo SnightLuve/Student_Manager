@@ -119,9 +119,17 @@ void statsByClass(const Node *head) {
         return;
     }
     printf("  %-20s %7s %8s %20s\n", "Lop", "Si so", "DTB lop", "So SV Gioi tro len");
-    for (int k = 0; k < used; k++)
+    int counted = 0;
+    for (int k = 0; k < used; k++) {
         printf("  %-20s %7d %8.2f %20d\n", stats[k].className, stats[k].count,
                stats[k].avg, stats[k].goodOrAbove);
+        counted += stats[k].count;
+    }
+    /* computeClassStats bỏ qua lớp vượt MAX_CLASS_STATS → báo, không im lặng. */
+    int total = countNodes(head);
+    if (counted < total)
+        printf("  ! Chi hien thi %d lop dau tien; %d sinh vien thuoc cac lop khac "
+               "chua duoc thong ke.\n", used, total - counted);
 }
 
 void showSubjectAverages(const Node *head) {

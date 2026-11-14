@@ -7,6 +7,7 @@
 #include "file_io.h"
 #include "search_sort.h"
 #include "stats.h"
+#include "test_capture.h"
 
 /* Dung CHECK thay assert de test van chay o Release/NDEBUG. */
 #define CHECK(condition) do { \
@@ -222,6 +223,41 @@ static void testStats(void) {
     puts("PASS: thong ke DTB, cao/thap nhat, theo lop, theo mon");
 }
 
+/* Qua MAX_CLASS_STATS lop: khong tran mang, va statsByClass phai bao so SV bi bo
+ * qua thay vi im lang. Dung MAX_CLASS_STATS lop thi KHONG duoc canh bao. */
+static void testManyClasses(void) {
+    Node *head = NULL;
+    char id[MAX_ID], cls[MAX_CLASS];
+    for (int i = 0; i < MAX_CLASS_STATS; ++i) {
+        snprintf(id, sizeof id, "SV%03d", i);
+        snprintf(cls, sizeof cls, "LOP%02d", i);
+        Student s = makeStudent(id, "Sinh Vien", cls, 5.0f);
+        CHECK(addStudent(&head, &s) == 1);
+    }
+    captureBegin("stats_capture.txt");
+    statsByClass(head);
+    char *out = captureEnd();
+    CHECK(strstr(out, "LOP49") != NULL);
+    CHECK(strstr(out, "Chi hien thi") == NULL);         /* dung 50 lop: khong canh bao */
+    free(out);
+
+    for (int i = 0; i < 3; ++i) {                       /* 2 lop moi, 3 SV bi bo qua */
+        snprintf(id, sizeof id, "SV9%02d", i);
+        Student s = makeStudent(id, "Sinh Vien", i == 0 ? "LOP_THUA_A" : "LOP_THUA_B", 5.0f);
+        CHECK(addStudent(&head, &s) == 1);
+    }
+    ClassStat stats[MAX_CLASS_STATS];
+    CHECK(computeClassStats(head, stats, MAX_CLASS_STATS) == MAX_CLASS_STATS);
+    captureBegin("stats_capture.txt");
+    statsByClass(head);
+    out = captureEnd();
+    CHECK(strstr(out, "Chi hien thi 50 lop dau tien; 3 sinh vien") != NULL);
+    CHECK(strstr(out, "LOP_THUA") == NULL);
+    free(out);
+    freeList(&head);
+    puts("PASS: thong ke > 50 lop co canh bao, dung 50 lop khong canh bao");
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Cach dung: %s <students.dat>\n", argv[0]);
@@ -233,6 +269,7 @@ int main(int argc, char **argv) {
     testSort();
     testRankBoundaries();
     testStats();
+    testManyClasses();
     puts("All search/sort/stats checks passed.");
     return 0;
 }

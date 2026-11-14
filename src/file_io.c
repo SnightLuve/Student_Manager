@@ -198,10 +198,16 @@ static int writeCsvText(FILE *file, const char *text) {
     return !quoted || fputc('"', file) != EOF;
 }
 
-/* Dinh dang CSV co dau cham thap phan ngay ca khi caller doi LC_NUMERIC. */
+/* Lam tron bang "%.2f" giong het man hinh (printStudentRow) de CSV va man hinh
+ * khong lech nhau o gia tri bien nhu 8.125; sau do doi dau phay thap phan
+ * (neu caller doi LC_NUMERIC) thanh dau cham de khong pha cot CSV. */
 static int writeCsvScore(FILE *file, float score) {
-    int hundredths = (int)(score * 100.0f + 0.5f);
-    return fprintf(file, ",%d.%02d", hundredths / 100, hundredths % 100) >= 0;
+    char text[32];
+    int length = snprintf(text, sizeof text, "%.2f", (double)score);
+    if (length < 0 || (size_t)length >= sizeof text) return 0;
+    for (char *p = text; *p; ++p)
+        if (*p == ',') *p = '.';
+    return fprintf(file, ",%s", text) >= 0;
 }
 
 int exportCsv(const char *path, const Node *head) {

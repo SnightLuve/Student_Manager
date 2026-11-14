@@ -34,8 +34,10 @@ if (BUILD_TESTING)
         target_compile_options(file_io_tests PRIVATE -Wall -Wextra)
     endif ()
     add_test(NAME file_io COMMAND file_io_tests)
+    # Test chi doc file mau (sample_students.dat). KHONG dung data/students.dat:
+    # do la file du lieu that, chuong trinh autosave vao do nen so SV thay doi.
     add_test(NAME file_io_sample COMMAND file_io_tests
-            "${CMAKE_CURRENT_SOURCE_DIR}/data/students.dat")
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/sample_students.dat")
     add_executable(search_sort_stats_tests
             tests/test_search_sort_stats.c src/student.c src/list.c src/file_io.c
             src/search_sort.c src/stats.c)
@@ -44,10 +46,22 @@ if (BUILD_TESTING)
         target_compile_options(search_sort_stats_tests PRIVATE -Wall -Wextra)
     endif ()
     add_test(NAME search_sort_stats COMMAND search_sort_stats_tests
-            "${CMAKE_CURRENT_SOURCE_DIR}/data/students.dat")
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/sample_students.dat")
+    add_executable(student_list_tests
+            tests/test_student_list.c src/student.c src/list.c
+            src/search_sort.c src/stats.c)
+    target_include_directories(student_list_tests PRIVATE include)
+    if (NOT MSVC)
+        target_compile_options(student_list_tests PRIVATE -Wall -Wextra)
+    endif ()
+    add_test(NAME student_list COMMAND student_list_tests)
+    add_test(NAME menu_input COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:Student_Manager>"
+            "-DSAMPLE=${CMAKE_CURRENT_SOURCE_DIR}/data/sample_students.dat"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_input.cmake")
     add_test(NAME menu_file_io COMMAND "${CMAKE_COMMAND}"
             "-DPROGRAM=$<TARGET_FILE:Student_Manager>"
-            "-DSAMPLE=${CMAKE_CURRENT_SOURCE_DIR}/data/students.dat"
+            "-DSAMPLE=${CMAKE_CURRENT_SOURCE_DIR}/data/sample_students.dat"
             "-DSAMPLE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/data/sample_students.dat"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_menu.cmake")
 endif ()

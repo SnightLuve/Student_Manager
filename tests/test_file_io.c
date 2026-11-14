@@ -219,6 +219,47 @@ static void testCsvAndErrors(void) {
     puts("PASS: CSV escaping, empty CSV, failed save preserves file, bad arguments");
 }
 
+/* Diem/DTB trong CSV phai lam tron giong het man hinh ("%.2f"), ke ca o gia tri
+ * bien nhu 8.125 (DTB cua 8,8,8,8,8.625) va 0.125; 0 va 10 in dung dinh dang. */
+static void testCsvRounding(void) {
+    Node *head = NULL;
+    float edge[MAX_SUBJECTS] = {8.0f, 8.0f, 8.0f, 8.0f, 8.625f};
+    float extremes[MAX_SUBJECTS] = {0.0f, 10.0f, 0.125f, 9.995f, 0.005f};
+    Student a, b;
+    initStudent(&a, "SV050", "Bien Lam Tron", "CNTT1", edge);
+    initStudent(&b, "SV051", "Cuc Tri", "CNTT1", extremes);
+    CHECK(a.avg == 8.125f);                             /* dung la gia tri bien */
+    CHECK(addStudent(&head, &a) == 1 && addStudent(&head, &b) == 1);
+    CHECK(exportCsv(csvPath, head) == 1);
+
+    char expected[2][256];
+    const Student *rows[2] = {&a, &b};
+    for (int r = 0; r < 2; ++r) {
+        int len = snprintf(expected[r], sizeof expected[r], "%s,%s,%s",
+                           rows[r]->id, rows[r]->name, rows[r]->className);
+        for (int i = 0; i < MAX_SUBJECTS; ++i)
+            len += snprintf(expected[r] + len, sizeof expected[r] - (size_t)len,
+                            ",%.2f", (double)rows[r]->scores[i]);
+        snprintf(expected[r] + len, sizeof expected[r] - (size_t)len, ",%.2f,%s\r\n",
+                 (double)rows[r]->avg, rankName(classify(rows[r]->avg)));
+    }
+    FILE *f = fopen(csvPath, "rb");
+    CHECK(f != NULL);
+    char line[256];
+    CHECK(fgets(line, sizeof line, f) != NULL);         /* bo dong tieu de */
+    for (int r = 0; r < 2; ++r) {
+        CHECK(fgets(line, sizeof line, f) != NULL);
+        if (strcmp(line, expected[r]) != 0)
+            fprintf(stderr, "CSV:      %sMan hinh: %s", line, expected[r]);
+        CHECK(strcmp(line, expected[r]) == 0);
+    }
+    CHECK(fgets(line, sizeof line, f) == NULL);
+    CHECK(fclose(f) == 0);
+    CHECK(strstr(expected[1], ",0.00,10.00,") != NULL);
+    freeList(&head);
+    puts("PASS: CSV lam tron giong man hinh (8.125, 0.125, 9.995, 0, 10)");
+}
+
 static void testSample(const char *path) {
     Node *head = NULL;
     CHECK(loadFromFile(path, &head) == 18);
@@ -246,6 +287,7 @@ int main(int argc, char **argv) {
     testRoundTrip();
     testInvalidFiles();
     testCsvAndErrors();
+    testCsvRounding();
     CHECK(remove(binaryPath) == 0);
     CHECK(remove(csvPath) == 0);
     CHECK(remove(badPath) == 0);
