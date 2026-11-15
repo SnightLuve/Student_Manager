@@ -1,6 +1,6 @@
 /*
- * main.c — Menu điều khiển module TV1 (student + list) và TV3 (file_io).
- * bằng vòng lặp do-while và switch-case.
+ * main.c — Menu điều khiển module TV1 (student + list), TV2 (search_sort, stats)
+ * và TV3 (file_io) bằng vòng lặp do-while và switch-case.
  * TV4 có thể tách phần nhập liệu sang input.c và phần menu sang menu.c sau.
  */
 #include <stdio.h>
@@ -16,6 +16,8 @@
 #endif
 
 #include "file_io.h"
+#include "search_sort.h"
+#include "stats.h"
 
 /* ===================== Nhập liệu an toàn (fgets) ===================== */
 
@@ -272,6 +274,87 @@ static void handleEdit(Node *head, const char *dataFile) {
     } while (choice != 0);
 }
 
+/* Tìm theo tên / lớp (không phân biệt hoa thường) hoặc lọc theo khoảng ĐTB.
+ * Các hàm TV2 tự in bảng kết quả và số SV tìm được. */
+static void handleSearch(const Node *head) {
+    int choice;
+    do {
+        printf("\n--- TIM KIEM / LOC SINH VIEN ---\n"
+               "  1. Tim theo ho ten\n"
+               "  2. Tim theo lop\n"
+               "  3. Loc theo khoang DTB\n"
+               "  0. Quay lai\n");
+        choice = readInt("  Chon: ", 0, 3);
+        if (inputEnded) return;
+
+        switch (choice) {
+            case 1: {
+                char keyword[MAX_NAME];
+                readNonEmpty("  Nhap mot phan ho ten: ", keyword, sizeof keyword);
+                if (inputEnded) return;
+                searchByName(head, keyword);
+                break;
+            }
+            case 2: {
+                char keyword[MAX_CLASS];
+                readNonEmpty("  Nhap mot phan ten lop: ", keyword, sizeof keyword);
+                if (inputEnded) return;
+                searchByClass(head, keyword);
+                break;
+            }
+            case 3: {
+                float low = readFloat("  DTB tu : ", MIN_SCORE, MAX_SCORE);
+                float high = readFloat("  DTB den: ", MIN_SCORE, MAX_SCORE);
+                if (inputEnded) return;
+                filterByAvgRange(head, low, high);   /* tự đảo nếu low > high */
+                break;
+            }
+            case 0:
+                break;
+        }
+    } while (choice != 0);
+}
+
+/* Sắp xếp bằng Merge Sort; chọn tiêu chí qua mảng con trỏ hàm.
+ * Thứ tự mới được lưu ngay như mọi thay đổi khác của danh sách. */
+static void handleSort(Node **head, const char *dataFile) {
+    static const CompareFn criteria[] = {
+        cmpById, cmpByName, cmpByAvgDesc, cmpByClassThenAvg
+    };
+    static const char *const criteriaNames[] = {
+        "Ma SV tang dan",
+        "Ten tang dan (A-Z)",
+        "DTB giam dan",
+        "Lop tang dan, cung lop thi DTB giam dan"
+    };
+    const int count = (int)(sizeof criteria / sizeof criteria[0]);
+
+    printf("\n--- SAP XEP DANH SACH ---\n");
+    if (*head == NULL) { printf("  Danh sach rong.\n"); return; }
+    for (int i = 0; i < count; i++)
+        printf("  %d. %s\n", i + 1, criteriaNames[i]);
+    int k = readInt("  Chon tieu chi: ", 1, count);
+    if (inputEnded) return;
+
+    mergeSort(head, criteria[k - 1]);
+    printf("  => Da sap xep theo: %s\n", criteriaNames[k - 1]);
+    printList(*head);
+    autoSave(*head, dataFile);
+}
+
+static void handleStats(const Node *head) {
+    printf("\n--- THONG KE & XEP LOAI ---\n");
+    if (head == NULL) { printf("  Danh sach rong.\n"); return; }
+    printf("\n[Theo xep loai]\n");
+    showRankStats(head);
+    printf("\n[Cao nhat / thap nhat]\n");
+    showTopAndBottom(head);
+    printf("\n[Theo lop]\n");
+    statsByClass(head);
+    printf("\n[DTB tung mon]\n");
+    showSubjectAverages(head);
+}
+
 static void handleDelete(Node **head, const char *dataFile) {
     char id[MAX_ID];
     printf("\n--- XOA SINH VIEN ---\n");
@@ -391,6 +474,9 @@ static void printMainMenu(const char *dataFile) {
     printf("  8. Import du lieu mau\n");
     printf("  9. Xuat bao cao CSV\n");
     printf(" 10. Xem ban ghi trong file da luu\n");
+    printf(" 11. Tim kiem / loc sinh vien\n");
+    printf(" 12. Sap xep danh sach\n");
+    printf(" 13. Thong ke & xep loai\n");
     printf("  0. Thoat\n");
     printf("--------------------------------------------\n");
 }
@@ -431,7 +517,7 @@ int main(int argc, char **argv) {
 
     do {
         printMainMenu(dataFile);
-        choice = readInt("Lua chon cua ban: ", 0, 10);
+        choice = readInt("Lua chon cua ban: ", 0, 13);
 
         switch (choice) {
             case 1: handleAdd(&head, dataFile); break;
@@ -444,6 +530,9 @@ int main(int argc, char **argv) {
             case 8: handleImportSample(&head, dataFile); break;
             case 9: handleExportCsv(head, dataFile); break;
             case 10: handleReadRecord(dataFile); break;
+            case 11: handleSearch(head);   break;
+            case 12: handleSort(&head, dataFile); break;
+            case 13: handleStats(head);    break;
             case 0:
                 if (handleSave(head, dataFile)) {
                     printf("Tam biet!\n");
