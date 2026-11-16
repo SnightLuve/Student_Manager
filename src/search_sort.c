@@ -4,26 +4,83 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 
 #include "search_sort.h"
 
-/* Sai số khi so ĐTB với biên — giống classify trong student.c. */
-#define AVG_EPS 1e-4f
-
 /* ===================== Hàm phụ ===================== */
 
-/* So sánh hai chuỗi không phân biệt hoa thường (strcasecmp không thuộc C11).
- * Trả về < 0, 0, > 0 như strcmp. */
-static int compareIgnoreCase(const char *a, const char *b) {
-    while (*a != '\0' && *b != '\0') {
-        int ca = tolower((unsigned char)*a);
-        int cb = tolower((unsigned char)*b);
-        if (ca != cb) return ca - cb;
-        a++;
-        b++;
+/* Decode UTF-8 independently of the active locale; invalid bytes compare literally. */
+static unsigned int nextUtf8CodePoint(const unsigned char **text) {
+    const unsigned char *p = *text;
+    unsigned int codePoint;
+
+    if (p[0] < 0x80) {
+        *text = p + 1;
+        return p[0];
     }
-    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+    if (p[0] >= 0xC2 && p[0] <= 0xDF
+        && (p[1] & 0xC0) == 0x80) {
+        codePoint = ((unsigned int)(p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+        *text = p + 2;
+        return codePoint;
+    }
+    if (p[0] >= 0xE0 && p[0] <= 0xEF
+        && (p[1] & 0xC0) == 0x80 && p[1] != '\0'
+        && (p[2] & 0xC0) == 0x80
+        && !(p[0] == 0xE0 && p[1] < 0xA0)
+        && !(p[0] == 0xED && p[1] >= 0xA0)) {
+        codePoint = ((unsigned int)(p[0] & 0x0F) << 12)
+                    | ((unsigned int)(p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+        *text = p + 3;
+        return codePoint;
+    }
+    if (p[0] >= 0xF0 && p[0] <= 0xF4
+        && (p[1] & 0xC0) == 0x80 && p[1] != '\0'
+        && (p[2] & 0xC0) == 0x80 && p[2] != '\0'
+        && (p[3] & 0xC0) == 0x80
+        && !(p[0] == 0xF0 && p[1] < 0x90)
+        && !(p[0] == 0xF4 && p[1] > 0x8F)) {
+        codePoint = ((unsigned int)(p[0] & 0x07) << 18)
+                    | ((unsigned int)(p[1] & 0x3F) << 12)
+                    | ((unsigned int)(p[2] & 0x3F) << 6) | (p[3] & 0x3F);
+        *text = p + 4;
+        return codePoint;
+    }
+
+    *text = p + 1;
+    return p[0];
+}
+
+/* Fold ASCII and Latin case pairs, including precomposed Vietnamese letters. */
+static unsigned int foldCodePoint(unsigned int codePoint) {
+    if (codePoint >= 'A' && codePoint <= 'Z') return codePoint + ('a' - 'A');
+    if ((codePoint >= 0x00C0 && codePoint <= 0x00D6)
+        || (codePoint >= 0x00D8 && codePoint <= 0x00DE))
+        return codePoint + 0x20;
+    if ((codePoint >= 0x0100 && codePoint <= 0x012F && codePoint % 2 == 0)
+        || (codePoint >= 0x0132 && codePoint <= 0x0137 && codePoint % 2 == 0)
+        || (codePoint >= 0x014A && codePoint <= 0x0177 && codePoint % 2 == 0)
+        || (codePoint >= 0x1E00 && codePoint <= 0x1E95 && codePoint % 2 == 0)
+        || (codePoint >= 0x1EA0 && codePoint <= 0x1EF9 && codePoint % 2 == 0))
+        return codePoint + 1;
+    if (codePoint >= 0x0139 && codePoint <= 0x0148 && codePoint % 2 == 1)
+        return codePoint + 1;
+    if (codePoint >= 0x0179 && codePoint <= 0x017E && codePoint % 2 == 1)
+        return codePoint + 1;
+    if (codePoint == 0x0178) return 0x00FF;
+    if (codePoint == 0x1E9E) return 0x00DF;
+    return codePoint;
+}
+
+static int compareIgnoreCase(const char *a, const char *b) {
+    const unsigned char *left = (const unsigned char *)a;
+    const unsigned char *right = (const unsigned char *)b;
+    while (*left != '\0' && *right != '\0') {
+        unsigned int ca = foldCodePoint(nextUtf8CodePoint(&left));
+        unsigned int cb = foldCodePoint(nextUtf8CodePoint(&right));
+        if (ca != cb) return ca < cb ? -1 : 1;
+    }
+    return *left == *right ? 0 : (*left == '\0' ? -1 : 1);
 }
 
 /* Trả về con trỏ tới tên (từ cuối) trong họ tên; không có dấu cách thì cả chuỗi. */
@@ -49,14 +106,22 @@ static void printSearchSummary(int found) {
 
 int containsIgnoreCase(const char *text, const char *keyword) {
     if (text == NULL || keyword == NULL) return 0;
-    size_t keyLen = strlen(keyword);
-    if (keyLen == 0) return 1;
-    for (; *text != '\0'; text++) {             /* thử từng vị trí bắt đầu */
-        size_t i = 0;
-        while (i < keyLen && text[i] != '\0'
-               && tolower((unsigned char)text[i]) == tolower((unsigned char)keyword[i]))
-            i++;
-        if (i == keyLen) return 1;
+    if (*keyword == '\0') return 1;
+    const unsigned char *start = (const unsigned char *)text;
+    while (*start != '\0') {
+        const unsigned char *candidate = start;
+        const unsigned char *query = (const unsigned char *)keyword;
+        int match = 1;
+        while (*candidate != '\0' && *query != '\0') {
+            unsigned int a = foldCodePoint(nextUtf8CodePoint(&candidate));
+            unsigned int b = foldCodePoint(nextUtf8CodePoint(&query));
+            if (a != b) {
+                match = 0;
+                break;
+            }
+        }
+        if (match && *query == '\0') return 1;
+        nextUtf8CodePoint(&start);
     }
     return 0;
 }
@@ -85,7 +150,7 @@ int filterByAvgRange(const Node *head, float a, float b) {
     }
     int found = 0;
     for (const Node *p = head; p != NULL; p = p->next)
-        if (p->data.avg + AVG_EPS >= a && p->data.avg - AVG_EPS <= b)
+        if (p->data.avg >= a && p->data.avg <= b)
             printMatch(&found, &p->data);
     printSearchSummary(found);
     return found;

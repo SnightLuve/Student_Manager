@@ -61,13 +61,38 @@ int deleteStudent(Node **head, const char *id) {
     return 1;
 }
 
+int deleteAllStudents(Node **head) {
+    if (head == NULL) return 0;
+    int deleted = 0;
+    Node *cur = *head;
+    while (cur != NULL) {
+        Node *next = cur->next;
+        free(cur);
+        cur = next;
+        deleted++;
+    }
+    *head = NULL;
+    LOG("deleteAllStudents: da xoa %d sinh vien", deleted);
+    return deleted;
+}
+
+static int hasTerminator(const char *text, size_t size) {
+    return text != NULL && memchr(text, '\0', size) != NULL;
+}
+
 int updateStudent(Node *head, const Student *newData) {
+    if (newData == NULL
+        || !hasTerminator(newData->id, sizeof newData->id)
+        || !hasTerminator(newData->name, sizeof newData->name)
+        || !hasTerminator(newData->className, sizeof newData->className))
+        return 0;
+
     Node *node = findById(head, newData->id);
     if (node == NULL) return 0;
 
     /* Sửa trực tiếp qua con trỏ; không đổi mã (khóa). */
-    strcpy(node->data.name, newData->name);
-    strcpy(node->data.className, newData->className);
+    memcpy(node->data.name, newData->name, sizeof node->data.name);
+    memcpy(node->data.className, newData->className, sizeof node->data.className);
     for (int i = 0; i < MAX_SUBJECTS; i++)
         node->data.scores[i] = newData->scores[i];
     computeAverage(&node->data);            /* sửa điểm → tính lại ĐTB */

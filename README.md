@@ -14,7 +14,8 @@ cách cài đặt từng chức năng, cách đáp ứng **từng yêu cầu b�
 Xem [hướng dẫn module TV3](docs/file_io.md) để build, kiểm thử và bàn giao giao diện.
 Menu trong `src/main.c` đã nối đọc khi khởi động, tự lưu sau mỗi lần thêm/sửa/xóa
 thành công, lưu khi thoát, import file mẫu riêng (8),
-xuất CSV (9), xem bản ghi trong file (10) và tham số `-f <file>`.
+xuất CSV (9), xem bản ghi trong file (10), xóa toàn bộ danh sách có xác nhận và
+tự lưu (14), cùng tham số `-f <file>`.
 
 ---
 
@@ -75,6 +76,7 @@ xuất CSV (9), xem bản ghi trong file (10) và tham số `-f <file>`.
 | E5 | In danh sách theo thứ tự ngược | Hàm **đệ quy** in từ cuối danh sách lên |
 | E6 | Xuất báo cáo CSV | Ghi file văn bản mở được bằng Excel |
 | E7 | Xem bản ghi thứ *i* trong file | Đọc trực tiếp bằng `fseek` (truy cập ngẫu nhiên) |
+| E8 | Xóa toàn bộ sinh viên | Xác nhận trước khi giải phóng danh sách và tự lưu file rỗng |
 
 ---
 

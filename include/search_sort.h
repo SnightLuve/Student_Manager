@@ -16,7 +16,8 @@ typedef int (*CompareFn)(const Student *a, const Student *b);
 
 /* ---------- Tìm kiếm / lọc ---------- */
 
-/* Kiểm tra text có chứa keyword (không phân biệt hoa thường).
+/* Kiểm tra text có chứa keyword (không phân biệt hoa thường; hỗ trợ UTF-8
+ * ASCII và chữ Latin dựng sẵn, bao gồm tiếng Việt).
  * Trả về 1 nếu có (keyword rỗng luôn khớp), 0 nếu không hoặc tham số NULL. */
 int containsIgnoreCase(const char *text, const char *keyword);
 
@@ -29,7 +30,7 @@ int searchByName(const Node *head, const char *keyword);
 int searchByClass(const Node *head, const char *keyword);
 
 /* In bảng các SV có ĐTB trong đoạn [a, b] (tự hoán đổi nếu a > b;
- * biên có sai số 1e-4 như classify). Trả về số SV khớp. */
+ * hai biên được so sánh chính xác, không nới bằng sai số). Trả về số SV khớp. */
 int filterByAvgRange(const Node *head, float a, float b);
 
 /* ---------- Hàm so sánh (dùng làm con trỏ hàm) ---------- */

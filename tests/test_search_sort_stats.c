@@ -60,8 +60,11 @@ static void testSearch(void) {
 
     CHECK(containsIgnoreCase("Nguyen Van An", "van"));
     CHECK(containsIgnoreCase("Nguyen Van An", "AN"));
+    CHECK(containsIgnoreCase("NGUYỄN THỊ ÁNH", "nguyễn thị ánh"));
+    CHECK(containsIgnoreCase("Nguyễn Thị Ánh", "THỊ"));
     CHECK(containsIgnoreCase("abc", ""));
     CHECK(!containsIgnoreCase("abc", "abcd"));
+    CHECK(!containsIgnoreCase("abc", "d"));
     CHECK(!containsIgnoreCase("Le Minh Chau", "an"));
     CHECK(!containsIgnoreCase(NULL, "a"));
 
@@ -79,6 +82,14 @@ static void testSearch(void) {
     CHECK(filterByAvgRange(head, 0.0f, 10.0f) == SAMPLE_COUNT);
     CHECK(filterByAvgRange(head, 9.6f, 10.0f) == 0);
     freeList(&head);
+
+    Node *nearBoundary = NULL;
+    Student belowEight = makeStudent("SV900", "Gan Nguong", "X", 7.99995f);
+    CHECK(classify(belowEight.avg) == RANK_FAIR);
+    CHECK(addStudent(&nearBoundary, &belowEight) == 1);
+    CHECK(filterByAvgRange(nearBoundary, 8.0f, 10.0f) == 0);
+    CHECK(filterByAvgRange(nearBoundary, 7.99f, 8.0f) == 1);
+    freeList(&nearBoundary);
     puts("PASS: T7 tim kiem theo ma, ten, lop, khoang diem");
 }
 
@@ -152,6 +163,9 @@ static void testSort(void) {
     CHECK(cmpByName(&b, &a) < 0 && cmpByName(&a, &b) > 0);
     CHECK(cmpByName(&a, &c) < 0);                 /* An < binh */
     CHECK(cmpByName(&a, &a) == 0);
+    Student upperVietnamese = makeStudent("SV101", "Nguyễn Ánh", "X", 5.0f);
+    Student lowerVietnamese = makeStudent("SV100", "nguyễn ánh", "X", 5.0f);
+    CHECK(cmpByName(&upperVietnamese, &lowerVietnamese) > 0);
 
     /* Danh sach 1 phan tu giu nguyen. */
     Node *single = NULL;

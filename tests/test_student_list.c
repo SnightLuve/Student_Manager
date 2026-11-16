@@ -182,6 +182,20 @@ static void testDelete(void) {
     puts("PASS: deleteStudent dau/giua/cuoi/khong ton tai/nut duy nhat/DS rong");
 }
 
+static void testDeleteAll(void) {
+    Node *head = NULL;
+    for (int i = 1; i <= 3; ++i) {
+        char id[MAX_ID];
+        snprintf(id, sizeof id, "SV%03d", i);
+        Student s = make(id, 5.0f);
+        CHECK(addStudent(&head, &s) == 1);
+    }
+    CHECK(deleteAllStudents(&head) == 3);
+    CHECK(head == NULL);
+    CHECK(deleteAllStudents(&head) == 0);
+    puts("PASS: deleteAllStudents frees all nodes and handles an empty list");
+}
+
 static void testUpdate(void) {
     Node *head = NULL;
     Student a = make("SV001", 5.0f), b = make("SV002", 5.0f);
@@ -198,6 +212,11 @@ static void testUpdate(void) {
     CHECK(strcmp(p->data.className, "LopMoi") == 0);
     CHECK(CLOSE(p->data.avg, 9.0f));
     CHECK(CLOSE(head->data.avg, 5.0f));                /* SV khac khong doi */
+
+    Student malformed = data;
+    memset(malformed.name, 'X', sizeof malformed.name);
+    CHECK(updateStudent(head, &malformed) == 0);
+    CHECK(strcmp(p->data.name, "Ten Moi") == 0);
 
     initStudent(&data, "SV999", "X", "Y", scores);
     CHECK(updateStudent(head, &data) == 0);
@@ -294,6 +313,7 @@ int main(void) {
     testSetters();
     testAddFind();
     testDelete();
+    testDeleteAll();
     testUpdate();
     testPrint();
     testLargeList();

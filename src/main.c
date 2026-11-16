@@ -3,6 +3,10 @@
  * và TV3 (file_io) bằng vòng lặp do-while và switch-case.
  * TV4 có thể tách phần nhập liệu sang input.c và phần menu sang menu.c sau.
  */
+#ifndef _WIN32
+#define _XOPEN_SOURCE 700
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +15,6 @@
 #include <limits.h>
 #ifdef _WIN32
 #include <direct.h>
-#else
-#include <sys/stat.h>
 #endif
 
 #include "file_io.h"
@@ -373,6 +375,21 @@ static void handleDelete(Node **head, const char *dataFile) {
     }
 }
 
+static void handleDeleteAll(Node **head, const char *dataFile) {
+    printf("\n--- XOA TAT CA SINH VIEN ---\n");
+    if (*head == NULL) {
+        printf("  Danh sach rong.\n");
+        return;
+    }
+    if (!confirm("  Ban chac chan muon xoa tat ca sinh vien? (y/n): ")) {
+        printf("  Da huy.\n");
+        return;
+    }
+    int deleted = deleteAllStudents(head);
+    printf("  => Da xoa tat ca %d sinh vien.\n", deleted);
+    autoSave(*head, dataFile);
+}
+
 /* Lưu toàn bộ DSLK, bao gồm các thay đổi thêm/sửa/xóa từ lần lưu trước. */
 static int handleSave(const Node *head, const char *dataFile) {
     if (!saveToFile(dataFile, head)) {
@@ -477,8 +494,27 @@ static void printMainMenu(const char *dataFile) {
     printf(" 11. Tim kiem / loc sinh vien\n");
     printf(" 12. Sap xep danh sach\n");
     printf(" 13. Thong ke & xep loai\n");
+    printf(" 14. Xoa tat ca sinh vien\n");
     printf("  0. Thoat\n");
     printf("--------------------------------------------\n");
+}
+
+static int isSameFilePath(const char *left, const char *right) {
+    if (strcmp(left, right) == 0) return 1;
+#ifdef _WIN32
+    char *leftPath = _fullpath(NULL, left, 0);
+    char *rightPath = _fullpath(NULL, right, 0);
+    int same = leftPath != NULL && rightPath != NULL
+               && _stricmp(leftPath, rightPath) == 0;
+#else
+    char *leftPath = realpath(left, NULL);
+    char *rightPath = realpath(right, NULL);
+    int same = leftPath != NULL && rightPath != NULL
+               && strcmp(leftPath, rightPath) == 0;
+#endif
+    free(leftPath);
+    free(rightPath);
+    return same;
 }
 
 /* ===================== main ===================== */
@@ -489,6 +525,10 @@ int main(int argc, char **argv) {
         dataFile = argv[2];
     } else if (argc != 1) {
         fprintf(stderr, "Cach dung: %s [-f <file_du_lieu>]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+    if (isSameFilePath(dataFile, DEFAULT_SAMPLE_FILE)) {
+        fprintf(stderr, "Khong duoc dung file mau lam file du lieu.\n");
         return EXIT_FAILURE;
     }
     /* Chay tu thu muc build van tao duoc file du lieu mac dinh lan dau. */
@@ -517,7 +557,7 @@ int main(int argc, char **argv) {
 
     do {
         printMainMenu(dataFile);
-        choice = readInt("Lua chon cua ban: ", 0, 13);
+        choice = readInt("Lua chon cua ban: ", 0, 14);
 
         switch (choice) {
             case 1: handleAdd(&head, dataFile); break;
@@ -533,6 +573,7 @@ int main(int argc, char **argv) {
             case 11: handleSearch(head);   break;
             case 12: handleSort(&head, dataFile); break;
             case 13: handleStats(head);    break;
+            case 14: handleDeleteAll(&head, dataFile); break;
             case 0:
                 if (handleSave(head, dataFile)) {
                     printf("Tam biet!\n");

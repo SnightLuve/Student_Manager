@@ -30,6 +30,10 @@ int addStudent(Node **head, const Student *s);
  * Trả về: 1 đã xóa, 0 không tìm thấy. */
 int deleteStudent(Node **head, const char *id);
 
+/* Xóa toàn bộ sinh viên, giải phóng các nút và đặt *head = NULL.
+ * Trả về số sinh viên đã xóa; head NULL thì trả về 0. */
+int deleteAllStudents(Node **head);
+
 /* Sửa thông tin sinh viên có mã newData->id: thay họ tên, lớp, điểm
  * (giữ nguyên mã) và tính lại ĐTB. Trả về: 1 thành công, 0 không tìm thấy. */
 int updateStudent(Node *head, const Student *newData);

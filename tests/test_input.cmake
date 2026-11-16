@@ -98,8 +98,8 @@ require_output("Ho ten       : ${utf8Short}")
 
 # 3) So nguyen o menu: chu, so kem chu, tran long, ngoai khoang, so am deu bi tu choi.
 fresh_data()
-run_menu("abc\n5abc\n99999999999999999999\n14\n-1\n 7 \n\n0\n")
-require_count("Vui long nhap so nguyen trong khoang [0, 13]" 5)
+run_menu("abc\n5abc\n99999999999999999999\n15\n-1\n 7 \n\n0\n")
+require_count("Vui long nhap so nguyen trong khoang [0, 14]" 5)
 require_output("So sinh vien: 18")
 
 # 4) Diem: ngoai khoang, nan, inf, dau phay thap phan bi tu choi; 1e1 = 10 hop le.

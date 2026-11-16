@@ -49,14 +49,11 @@ void computeAverage(Student *s) {
 }
 
 Rank classify(float avg) {
-    /* Sai số nhỏ: ĐTB tính bằng float có thể ra 7.9999 thay vì 8.0
-     * → không cộng eps sẽ bị xếp nhầm xuống mức dưới (kiểm thử T12). */
-    const float eps = 1e-4f;
-    if (avg + eps >= 9.0f) return RANK_EXCELLENT;
-    if (avg + eps >= 8.0f) return RANK_GOOD;
-    if (avg + eps >= 6.5f) return RANK_FAIR;
-    if (avg + eps >= 5.0f) return RANK_AVERAGE;
-    if (avg + eps >= 3.5f) return RANK_WEAK;
+    if (avg >= 9.0f) return RANK_EXCELLENT;
+    if (avg >= 8.0f) return RANK_GOOD;
+    if (avg >= 6.5f) return RANK_FAIR;
+    if (avg >= 5.0f) return RANK_AVERAGE;
+    if (avg >= 3.5f) return RANK_WEAK;
     return RANK_POOR;
 }
 
